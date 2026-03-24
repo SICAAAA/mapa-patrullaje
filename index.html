@@ -21,6 +21,10 @@
       padding: 10px;
       background: #f5f5f5;
       border-bottom: 1px solid #ccc;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
     }
 
     select {
@@ -28,12 +32,20 @@
       min-width: 200px;
     }
 
+    button {
+      padding: 6px 12px;
+      cursor: pointer;
+      border: 1px solid #999;
+      background: white;
+      border-radius: 4px;
+    }
+
     .mensaje {
+      width: 100%;
       padding: 8px 10px;
       background: #fff3cd;
       border: 1px solid #ffe69c;
       color: #664d03;
-      margin-top: 8px;
       display: none;
     }
   </style>
@@ -43,6 +55,7 @@
   <div class="panel">
     <label for="patrullajeSelect">Patrullaje:</label>
     <select id="patrullajeSelect"></select>
+    <button id="btnActualizar" type="button">Actualizar mapa</button>
     <div id="mensaje" class="mensaje"></div>
   </div>
 
@@ -58,7 +71,7 @@
             { orden: 1, lat: -33.041325, lng: -71.623469 },
             { orden: 2, lat: -33.041219, lng: -71.623314 },
             { orden: 3, lat: -33.041558, lng: -71.623328 }
-            //{ orden: 4, lat: -33.041567, lng: -71.623097 }
+            // { orden: 4, lat: -33.041567, lng: -71.623097 }
           ]
         },
         {
@@ -81,13 +94,11 @@
 
     const select = document.getElementById('patrullajeSelect');
     const mensaje = document.getElementById('mensaje');
+    const btnActualizar = document.getElementById('btnActualizar');
 
     let rutaActual = null;
     let marcadoresActuales = [];
 
-    // Leer el parámetro de la URL
-    // Ejemplo esperado:
-    // ?patrullaje=PAT-001
     const params = new URLSearchParams(window.location.search);
     const patrullajeDesdeURL = params.get('patrullaje');
 
@@ -164,34 +175,48 @@
       });
 
       map.fitBounds(rutaActual.getBounds(), { padding: [20, 20] });
-
-      // Sincronizar selector
       select.value = idPatrullaje;
     }
 
     function inicializarMapa() {
       poblarSelector();
 
-      // Si viene un patrullaje por URL, usarlo
       if (patrullajeDesdeURL) {
         const existe = data.patrullajes.some(p => p.id === patrullajeDesdeURL);
 
         if (existe) {
           dibujarPatrullaje(patrullajeDesdeURL);
         } else {
-          // Si no existe, dibuja el primero y avisa
           dibujarPatrullaje(data.patrullajes[0].id);
-          mostrarMensaje(`El parámetro de URL patrullaje="${patrullajeDesdeURL}" no existe en los datos.`);
+          mostrarMensaje(`El parámetro patrullaje="${patrullajeDesdeURL}" no existe en los datos.`);
         }
       } else if (data.patrullajes.length > 0) {
-        // Si no viene nada en URL, dibuja el primero
         dibujarPatrullaje(data.patrullajes[0].id);
       }
+    }
+
+    function actualizarMapa() {
+      const urlActual = new URL(window.location.href);
+
+      // Toma el patrullaje desde la URL si existe; si no, usa el seleccionado
+      const patrullajeActual = urlActual.searchParams.get('patrullaje') || select.value;
+
+      if (patrullajeActual) {
+        urlActual.searchParams.set('patrullaje', patrullajeActual);
+      }
+
+      // Anti-caché
+      urlActual.searchParams.set('ts', Date.now().toString());
+
+      // Recarga forzada con nueva URL
+      window.location.href = urlActual.toString();
     }
 
     select.addEventListener('change', function () {
       dibujarPatrullaje(this.value);
     });
+
+    btnActualizar.addEventListener('click', actualizarMapa);
 
     inicializarMapa();
   </script>
