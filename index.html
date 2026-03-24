@@ -27,6 +27,15 @@
       padding: 6px;
       min-width: 200px;
     }
+
+    .mensaje {
+      padding: 8px 10px;
+      background: #fff3cd;
+      border: 1px solid #ffe69c;
+      color: #664d03;
+      margin-top: 8px;
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -34,6 +43,7 @@
   <div class="panel">
     <label for="patrullajeSelect">Patrullaje:</label>
     <select id="patrullajeSelect"></select>
+    <div id="mensaje" class="mensaje"></div>
   </div>
 
   <div id="map"></div>
@@ -48,7 +58,7 @@
             { orden: 1, lat: -33.041325, lng: -71.623469 },
             { orden: 2, lat: -33.041219, lng: -71.623314 },
             { orden: 3, lat: -33.041558, lng: -71.623328 }
-            //{ orden: 4, lat: -33.041567, lng: -71.623097 }
+            // { orden: 4, lat: -33.041567, lng: -71.623097 }
           ]
         },
         {
@@ -70,20 +80,42 @@
     }).addTo(map);
 
     const select = document.getElementById('patrullajeSelect');
+    const mensaje = document.getElementById('mensaje');
 
     let rutaActual = null;
     let marcadoresActuales = [];
 
-    data.patrullajes.forEach(p => {
-      const option = document.createElement('option');
-      option.value = p.id;
-      option.textContent = p.id;
-      select.appendChild(option);
-    });
+    // Leer el parámetro de la URL
+    // Ejemplo esperado:
+    // ?patrullaje=PAT-001
+    const params = new URLSearchParams(window.location.search);
+    const patrullajeDesdeURL = params.get('patrullaje');
+
+    function mostrarMensaje(texto) {
+      mensaje.textContent = texto;
+      mensaje.style.display = 'block';
+    }
+
+    function ocultarMensaje() {
+      mensaje.textContent = '';
+      mensaje.style.display = 'none';
+    }
+
+    function poblarSelector() {
+      select.innerHTML = '';
+
+      data.patrullajes.forEach(p => {
+        const option = document.createElement('option');
+        option.value = p.id;
+        option.textContent = p.id;
+        select.appendChild(option);
+      });
+    }
 
     function limpiarMapa() {
       if (rutaActual) {
         map.removeLayer(rutaActual);
+        rutaActual = null;
       }
 
       marcadoresActuales.forEach(m => map.removeLayer(m));
@@ -92,9 +124,19 @@
 
     function dibujarPatrullaje(idPatrullaje) {
       limpiarMapa();
+      ocultarMensaje();
 
       const patrullaje = data.patrullajes.find(p => p.id === idPatrullaje);
-      if (!patrullaje || !patrullaje.puntos.length) return;
+
+      if (!patrullaje) {
+        mostrarMensaje(`No se encontró el patrullaje "${idPatrullaje}" en los datos.`);
+        return;
+      }
+
+      if (!patrullaje.puntos || patrullaje.puntos.length === 0) {
+        mostrarMensaje(`El patrullaje "${idPatrullaje}" no tiene puntos para mostrar.`);
+        return;
+      }
 
       const puntosOrdenados = [...patrullaje.puntos].sort((a, b) => a.orden - b.orden);
       const coordenadas = puntosOrdenados.map(p => [p.lat, p.lng]);
@@ -111,26 +153,47 @@
         }
 
         const marcador = L.marker([p.lat, p.lng])
-        .addTo(map)
-        .bindPopup(texto)
-        .bindTooltip(String(p.orden), {
-          permanent: true,
-          direction: 'top'
-        });
+          .addTo(map)
+          .bindPopup(texto)
+          .bindTooltip(String(p.orden), {
+            permanent: true,
+            direction: 'top'
+          });
+
         marcadoresActuales.push(marcador);
       });
 
-      map.fitBounds(rutaActual.getBounds());
+      map.fitBounds(rutaActual.getBounds(), { padding: [20, 20] });
+
+      // Sincronizar selector
+      select.value = idPatrullaje;
+    }
+
+    function inicializarMapa() {
+      poblarSelector();
+
+      // Si viene un patrullaje por URL, usarlo
+      if (patrullajeDesdeURL) {
+        const existe = data.patrullajes.some(p => p.id === patrullajeDesdeURL);
+
+        if (existe) {
+          dibujarPatrullaje(patrullajeDesdeURL);
+        } else {
+          // Si no existe, dibuja el primero y avisa
+          dibujarPatrullaje(data.patrullajes[0].id);
+          mostrarMensaje(`El parámetro de URL patrullaje="${patrullajeDesdeURL}" no existe en los datos.`);
+        }
+      } else if (data.patrullajes.length > 0) {
+        // Si no viene nada en URL, dibuja el primero
+        dibujarPatrullaje(data.patrullajes[0].id);
+      }
     }
 
     select.addEventListener('change', function () {
       dibujarPatrullaje(this.value);
     });
 
-    if (data.patrullajes.length > 0) {
-      select.value = data.patrullajes[0].id;
-      dibujarPatrullaje(data.patrullajes[0].id);
-    }
+    inicializarMapa();
   </script>
 </body>
 </html>
