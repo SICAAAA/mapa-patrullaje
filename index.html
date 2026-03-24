@@ -110,7 +110,13 @@
           texto = `Fin<br>${texto}`;
         }
 
-        const marcador = L.marker([p.lat, p.lng]).addTo(map).bindPopup(texto);
+        const marcador = L.marker([p.lat, p.lng])
+        .addTo(map)
+        .bindPopup(texto)
+        .bindTooltip(String(p.orden), {
+          permanent: true,
+          direction: 'top'
+        });
         marcadoresActuales.push(marcador);
       });
 
