@@ -27,17 +27,9 @@
       flex-wrap: wrap;
     }
 
-    select {
-      padding: 6px;
-      min-width: 200px;
-    }
-
     button {
       padding: 6px 12px;
       cursor: pointer;
-      border: 1px solid #999;
-      background: white;
-      border-radius: 4px;
     }
 
     .mensaje {
@@ -53,8 +45,6 @@
 <body>
 
   <div class="panel">
-    <label for="patrullajeSelect">Patrullaje:</label>
-    <select id="patrullajeSelect"></select>
     <button id="btnActualizar" type="button">Actualizar mapa</button>
     <div id="mensaje" class="mensaje"></div>
   </div>
@@ -63,27 +53,12 @@
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
-    const data = {
-      patrullajes: [
-        {
-          id: "PAT-001",
-          puntos: [
-            { orden: 1, lat: -33.041325, lng: -71.623469 },
-            { orden: 2, lat: -33.041219, lng: -71.623314 },
-            { orden: 3, lat: -33.041558, lng: -71.623328 }
-            //{ orden: 4, lat: -33.041567, lng: -71.623097 }
-          ]
-        },
-        {
-          id: "PAT-002",
-          puntos: [
-            { orden: 1, lat: -33.042000, lng: -71.624000 },
-            { orden: 2, lat: -33.042300, lng: -71.623700 },
-            { orden: 3, lat: -33.042700, lng: -71.623200 }
-          ]
-        }
-      ]
-    };
+    const API_LOCAL = 'http://localhost:3000/api/patrullajes/';
+
+    // ⚠️ SOLO PARA PRUEBAS
+    // NO dejes estas credenciales expuestas en producción
+    const API_KEY = 'HEZAuM3UiyQNjpjCbOxMjtD8HH6YGgsAGKn8d53eQmikc7ULw3TpNZRoMweIJH9TkhJJI6MauN5kIlDPimcyvDkeogD1FCvUjjR/Rphoxoc6s4aTXoLq7MlpsXH4/yaTowyd6oyb6dc21ljyhTUlZ0A/fFaE15/WvhENKQFppjQE9eLueg0FnwxDylXDXz+X';
+    const USER_DATA = 'w5HrfA7wbzxVwNwd0Jeh1w==';
 
     const map = L.map('map').setView([-33.041325, -71.623469], 16);
 
@@ -92,7 +67,6 @@
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
-    const select = document.getElementById('patrullajeSelect');
     const mensaje = document.getElementById('mensaje');
     const btnActualizar = document.getElementById('btnActualizar');
 
@@ -112,17 +86,6 @@
       mensaje.style.display = 'none';
     }
 
-    function poblarSelector() {
-      select.innerHTML = '';
-
-      data.patrullajes.forEach(p => {
-        const option = document.createElement('option');
-        option.value = p.id;
-        option.textContent = p.id;
-        select.appendChild(option);
-      });
-    }
-
     function limpiarMapa() {
       if (rutaActual) {
         map.removeLayer(rutaActual);
@@ -133,19 +96,12 @@
       marcadoresActuales = [];
     }
 
-    function dibujarPatrullaje(idPatrullaje) {
+    function dibujarPatrullajeDesdeDatos(patrullaje) {
       limpiarMapa();
       ocultarMensaje();
 
-      const patrullaje = data.patrullajes.find(p => p.id === idPatrullaje);
-
-      if (!patrullaje) {
-        mostrarMensaje(`No se encontró el patrullaje "${idPatrullaje}" en los datos.`);
-        return;
-      }
-
-      if (!patrullaje.puntos || patrullaje.puntos.length === 0) {
-        mostrarMensaje(`El patrullaje "${idPatrullaje}" no tiene puntos para mostrar.`);
+      if (!patrullaje || !patrullaje.puntos || patrullaje.puntos.length === 0) {
+        mostrarMensaje('No hay puntos para mostrar.');
         return;
       }
 
@@ -157,11 +113,8 @@
       puntosOrdenados.forEach((p, index) => {
         let texto = `Orden: ${p.orden}`;
 
-        if (index === 0) {
-          texto = `Inicio<br>${texto}`;
-        } else if (index === puntosOrdenados.length - 1) {
-          texto = `Fin<br>${texto}`;
-        }
+        if (index === 0) texto = `Inicio<br>${texto}`;
+        else if (index === puntosOrdenados.length - 1) texto = `Fin<br>${texto}`;
 
         const marcador = L.marker([p.lat, p.lng])
           .addTo(map)
@@ -175,50 +128,47 @@
       });
 
       map.fitBounds(rutaActual.getBounds(), { padding: [20, 20] });
-      select.value = idPatrullaje;
     }
 
-    function inicializarMapa() {
-      poblarSelector();
+    async function cargarPatrullajeDesdeAPI() {
+      if (!patrullajeDesdeURL) {
+        mostrarMensaje('No llegó el parámetro "patrullaje" en la URL.');
+        return;
+      }
 
-      if (patrullajeDesdeURL) {
-        const existe = data.patrullajes.some(p => p.id === patrullajeDesdeURL);
+      try {
+        const response = await fetch(`${API_LOCAL}${patrullajeDesdeURL}`);
 
-        if (existe) {
-          dibujarPatrullaje(patrullajeDesdeURL);
-        } else {
-          dibujarPatrullaje(data.patrullajes[0].id);
-          mostrarMensaje(`El parámetro patrullaje="${patrullajeDesdeURL}" no existe en los datos.`);
+        if (!response.ok) {
+          throw new Error(`Error HTTP ${response.status}`);
         }
-      } else if (data.patrullajes.length > 0) {
-        dibujarPatrullaje(data.patrullajes[0].id);
+
+        const data = await response.json();
+
+        console.log('Respuesta API local:', data);
+
+        if (!data.puntos || data.puntos.length === 0) {
+          mostrarMensaje(`No hay puntos para ${patrullajeDesdeURL}`);
+          limpiarMapa();
+          return;
+        }
+
+        dibujarPatrullajeDesdeDatos(data);
+
+      } catch (error) {
+        console.error(error);
+        mostrarMensaje(`Error al consultar API local: ${error.message}`);
       }
     }
-
     function actualizarMapa() {
       const urlActual = new URL(window.location.href);
-
-      // Toma el patrullaje desde la URL si existe; si no, usa el seleccionado
-      const patrullajeActual = urlActual.searchParams.get('patrullaje') || select.value;
-
-      if (patrullajeActual) {
-        urlActual.searchParams.set('patrullaje', patrullajeActual);
-      }
-
-      // Anti-caché
       urlActual.searchParams.set('ts', Date.now().toString());
-
-      // Recarga forzada con nueva URL
       window.location.href = urlActual.toString();
     }
 
-    select.addEventListener('change', function () {
-      dibujarPatrullaje(this.value);
-    });
-
     btnActualizar.addEventListener('click', actualizarMapa);
 
-    inicializarMapa();
+    cargarPatrullajeDesdeAPI();
   </script>
 </body>
 </html>
